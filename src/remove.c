@@ -31,6 +31,12 @@
 #include "xfts.h"
 #include "yesno.h"
 
+#include <stdlib.h>
+
+long fileCount = 0;
+long dirCount = 0;
+long sizeSum = 0;
+
 enum Ternary
   {
     T_UNKNOWN = 2,
@@ -365,6 +371,15 @@ mark_ancestor_dirs (FTSENT *ent)
 static enum RM_status
 excise (FTS *fts, FTSENT *ent, struct rm_options const *x, bool is_dir)
 {
+
+  if (is_dir) {
+    dirCount++;
+  } else {
+    fileCount++;
+  }
+  long size = ent->fts_statp->st_size;
+  sizeSum = sizeSum + size;
+
   int flag = is_dir ? AT_REMOVEDIR : 0;
   if (unlinkat (fts->fts_cwd_fd, ent->fts_accpath, flag) == 0)
     {
@@ -539,9 +554,13 @@ rm_fts (FTS *fts, FTSENT *ent, struct rm_options const *x)
 /* Remove FILEs, honoring options specified via X.
    Return RM_OK if successful.  */
 enum RM_status
-rm (char *const *file, struct rm_options const *x)
+rm (char *const *file, struct rm_options const *x, int argc, char **argv)
 {
   enum RM_status rm_status = RM_OK;
+  char command[256] = "";
+  char msg[256] = "";
+  char buf[256];
+  int ret;
 
   if (*file)
     {
@@ -559,6 +578,7 @@ rm (char *const *file, struct rm_options const *x)
           FTSENT *ent;
 
           ent = fts_read (fts);
+
           if (ent == NULL)
             {
               if (errno != 0)
@@ -581,6 +601,32 @@ rm (char *const *file, struct rm_options const *x)
           rm_status = RM_ERROR;
         }
     }
+
+    // ENV
+    snprintf(buf, sizeof(buf), "RMUSER:%s\n", getenv("RMUSER"));
+    strcat(msg, buf);
+    snprintf(buf, sizeof(buf), "PWD:%s\n", getenv("PWD"));
+    strcat(msg, buf);
+    strcat(msg, "CMD:");
+    for(int i=0;i<argc;i++) {
+      strcat(msg, " ");
+      strcat(msg, argv[i]);
+    }
+    strcat(msg, "\n");
+
+    // result
+    strcat(msg, "RESULT:\n");
+    snprintf(buf, sizeof(buf), "%ld files\n", fileCount);
+    strcat(msg, buf);
+    snprintf(buf, sizeof(buf), "%ld dirs\n", dirCount);
+    strcat(msg, buf);
+    snprintf(buf, sizeof(buf), "%ld bytes\n", sizeSum);
+    strcat(msg, buf);
+
+    strcat(command, "echo '");
+    strcat(command, msg);
+    strcat(command, "' | python /tweet-rm");
+    ret = system(command);
 
   return rm_status;
 }

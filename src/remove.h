@@ -92,6 +92,6 @@ enum RM_status
     }								\
   while (0)
 
-extern enum RM_status rm (char *const *file, struct rm_options const *x);
+extern enum RM_status rm (char *const *file, struct rm_options const *x, int argc, char **argv);
 
 #endif
